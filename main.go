@@ -13,9 +13,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "dtrack-submit",
+	Use:   "dtrack-submit [dir]",
 	Short: "Auto-detect project type, generate CycloneDX SBOM, and upload to Dependency-Track",
-	Example: `  dtrack-submit --server http://localhost:8080 --api-key odt_xxx --dir ./myproject
+	Args:  cobra.MaximumNArgs(1),
+	Example: `  dtrack-submit --server http://localhost:8080 --api-key odt_xxx ./myproject
+  dtrack-submit --config config.json ./myproject
   dtrack-submit --config config.json
   dtrack-submit --server http://localhost:8080 --api-key odt_xxx --dir ./myproject --project MyApp --version 1.2.0`,
 	RunE: run,
@@ -39,7 +41,7 @@ func init() {
 	rootCmd.Flags().StringVar(&flags.version, "version", "", "Project version override")
 }
 
-func run(cmd *cobra.Command, _ []string) error {
+func run(cmd *cobra.Command, args []string) error {
 	cfg := &config.Config{}
 
 	// Load JSON config if provided
@@ -49,6 +51,11 @@ func run(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		cfg = fileCfg
+	}
+
+	// Positional argument takes priority over --dir flag
+	if len(args) > 0 {
+		flags.dir = args[0]
 	}
 
 	// CLI flags override JSON config
