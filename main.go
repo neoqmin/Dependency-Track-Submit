@@ -16,10 +16,15 @@ var rootCmd = &cobra.Command{
 	Use:   "dtrack-submit [dir]",
 	Short: "Auto-detect project type, generate CycloneDX SBOM, and upload to Dependency-Track",
 	Args:  cobra.MaximumNArgs(1),
-	Example: `  dtrack-submit --server http://localhost:8080 --api-key odt_xxx ./myproject
-  dtrack-submit --config config.json ./myproject
-  dtrack-submit --config config.json
-  dtrack-submit --server http://localhost:8080 --api-key odt_xxx --dir ./myproject --project MyApp --version 1.2.0`,
+	Example: `  # config.json이 현재 디렉토리 또는 실행 파일 옆에 있으면 자동 로딩
+  dtrack-submit ./myproject
+
+  # config 파일 명시
+  dtrack-submit --config /etc/dtrack/config.json ./myproject
+
+  # 모든 값을 플래그로 직접 지정
+  dtrack-submit --server http://localhost:8080 --api-key odt_xxx ./myproject
+  dtrack-submit --server http://localhost:8080 --api-key odt_xxx --project MyApp --version 1.2.0 ./myproject`,
 	RunE: run,
 }
 
@@ -44,10 +49,11 @@ func init() {
 func run(cmd *cobra.Command, args []string) error {
 	cfg := &config.Config{}
 
-	// Auto-load config.json if --config and --server are both absent
+	// Auto-load config.json if --config and --server are both absent.
+	// Search order: current directory → executable directory.
 	configPath := flags.configFile
 	if configPath == "" && flags.server == "" {
-		configPath = "config.json"
+		configPath = findConfig()
 	}
 	if configPath != "" {
 		fileCfg, err := config.LoadFromFile(configPath)
@@ -191,6 +197,20 @@ func selectGenerator(info *detector.ProjectInfo) generator.Generator {
 	default:
 		return nil
 	}
+}
+
+// findConfig looks for config.json in the current directory, then next to the executable.
+func findConfig() string {
+	candidates := []string{"config.json"}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config.json"))
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 func main() {
