@@ -180,6 +180,9 @@ func submitProject(client *dtrack.Client, cfg *config.Config, info *detector.Pro
 	if err := gen.Generate(info.Dir, bomPath); err != nil {
 		return fmt.Errorf("SBOM generation failed: %w", err)
 	}
+	if err := generator.DowngradeSpecVersion(bomPath, "1.6"); err != nil {
+		return fmt.Errorf("BOM post-process failed: %w", err)
+	}
 	fi, _ := os.Stat(bomPath)
 	fmt.Printf("  Done (%.1f KB)\n", float64(fi.Size())/1024)
 

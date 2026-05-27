@@ -2,9 +2,26 @@ package generator
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/tidwall/sjson"
 )
+
+// DowngradeSpecVersion rewrites the specVersion field in a CycloneDX JSON BOM
+// to maxVersion if the file contains a newer version.
+func DowngradeSpecVersion(bomPath, maxVersion string) error {
+	data, err := os.ReadFile(bomPath)
+	if err != nil {
+		return err
+	}
+	patched, err := sjson.SetBytes(data, "specVersion", maxVersion)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(bomPath, patched, 0644)
+}
 
 // Generator produces a CycloneDX JSON SBOM at outPath.
 type Generator interface {
