@@ -12,11 +12,12 @@ func (g *CdxgenGenerator) Available() bool {
 }
 
 func (g *CdxgenGenerator) Generate(dir, outPath string) error {
+	args := []string{"-o", outPath, "--spec-version", "1.6", "."}
 	if toolExists("cdxgen") {
-		return run(dir, "cdxgen", "-o", outPath, ".")
+		return run(dir, "cdxgen", args...)
 	}
 	if toolExists("npx") {
-		return run(dir, "npx", "--yes", "@cyclonedx/cdxgen", "-o", outPath, ".")
+		return run(dir, "npx", append([]string{"--yes", "@cyclonedx/cdxgen"}, args...)...)
 	}
 	return fmt.Errorf("cdxgen not available: install via 'npm install -g @cyclonedx/cdxgen'")
 }
