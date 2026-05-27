@@ -11,12 +11,14 @@ import (
 type ProjectType string
 
 const (
-	TypeMaven  ProjectType = "maven"
-	TypeGradle ProjectType = "gradle"
-	TypeGo     ProjectType = "go"
-	TypeDotNet ProjectType = "dotnet"
-	TypeCpp    ProjectType = "cpp"
-	TypeNpm    ProjectType = "npm"
+	TypeMaven   ProjectType = "maven"
+	TypeGradle  ProjectType = "gradle"
+	TypeGo      ProjectType = "go"
+	TypeDotNet  ProjectType = "dotnet"
+	TypeCpp     ProjectType = "cpp"
+	TypeNpm     ProjectType = "npm"
+	TypeCocoa   ProjectType = "cocoapods"
+	TypeSwift   ProjectType = "swift"
 	TypeUnknown ProjectType = "unknown"
 )
 
@@ -123,6 +125,20 @@ func Detect(dir string) (*ProjectInfo, error) {
 	if exists(abs, "package.json") {
 		info := &ProjectInfo{Type: TypeNpm}
 		parsePackageJSON(filepath.Join(abs, "package.json"), info)
+		return info, nil
+	}
+
+	// CocoaPods (iOS / macOS Objective-C / Swift)
+	if exists(abs, "Podfile") || exists(abs, "Podfile.lock") {
+		info := &ProjectInfo{Type: TypeCocoa}
+		parsePodfile(abs, info)
+		return info, nil
+	}
+
+	// Swift Package Manager
+	if exists(abs, "Package.swift") {
+		info := &ProjectInfo{Type: TypeSwift}
+		parsePackageSwift(filepath.Join(abs, "Package.swift"), info)
 		return info, nil
 	}
 
@@ -307,4 +323,56 @@ func parsePackageJSON(path string, info *ProjectInfo) {
 	}
 	info.Name = pkg.Name
 	info.Version = pkg.Version
+}
+
+// Podfile — extract app name from xcodeproj reference or directory name
+func parsePodfile(dir string, info *ProjectInfo) {
+	data, err := os.ReadFile(filepath.Join(dir, "Podfile"))
+	if err != nil {
+		// fall back to directory name
+		info.Name = filepath.Base(dir)
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		// e.g. project 'MyApp' or xcodeproj 'MyApp/MyApp.xcodeproj'
+		for _, prefix := range []string{"project '", `project "`, "xcodeproj '", `xcodeproj "`} {
+			if strings.HasPrefix(strings.ToLower(line), strings.ToLower(prefix)) {
+				val := line[len(prefix):]
+				end := strings.IndexAny(val, `'"`)
+				if end > 0 {
+					// strip path, keep last component without extension
+					base := filepath.Base(val[:end])
+					info.Name = strings.TrimSuffix(strings.TrimSuffix(base, ".xcodeproj"), ".xcworkspace")
+					return
+				}
+			}
+		}
+	}
+	if info.Name == "" {
+		info.Name = filepath.Base(dir)
+	}
+}
+
+// Package.swift — extract name from swift package declaration
+func parsePackageSwift(path string, info *ProjectInfo) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		// name: "MyPackage"
+		if strings.Contains(line, "name:") {
+			start := strings.Index(line, `"`)
+			if start >= 0 {
+				rest := line[start+1:]
+				end := strings.Index(rest, `"`)
+				if end >= 0 {
+					info.Name = rest[:end]
+					return
+				}
+			}
+		}
+	}
 }

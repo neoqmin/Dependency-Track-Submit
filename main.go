@@ -94,7 +94,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("detection error: %w", err)
 	}
 	if len(projects) == 0 {
-		return fmt.Errorf("could not detect any project in %s\n  Supported: pom.xml, build.gradle, go.mod, *.csproj, *.sln, CMakeLists.txt, conanfile.*, vcpkg.json, package.json", absDir)
+		return fmt.Errorf("could not detect any project in %s\n  Supported: pom.xml, build.gradle, go.mod, *.csproj, *.sln, CMakeLists.txt, conanfile.*, vcpkg.json, package.json, Podfile, Package.swift", absDir)
 	}
 
 	rootName := cfg.Project
@@ -232,6 +232,8 @@ func selectGenerator(info *detector.ProjectInfo) generator.Generator {
 		return generator.NewCppGenerator()
 	case detector.TypeNpm:
 		return &generator.NpmGenerator{}
+	case detector.TypeCocoa, detector.TypeSwift:
+		return generator.NewCocoaGenerator()
 	default:
 		return nil
 	}
