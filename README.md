@@ -90,7 +90,7 @@ dtrack-submit --server <URL> --api-key <KEY> --dir <프로젝트경로>
 dtrack-submit --config config.json
 ```
 
-**config.json 예시:**
+**config.json 예시 — 단일 프로젝트:**
 ```json
 {
   "server": "http://localhost:8080",
@@ -100,6 +100,21 @@ dtrack-submit --config config.json
   "version": "1.0.0"
 }
 ```
+
+**config.json 예시 — 모노레포 (서브 디렉토리별 이름/버전 지정):**
+```json
+{
+  "server": "http://localhost:8080",
+  "api_key": "odt_xxxxxxxxxxxxxxxxxxxxxx",
+  "projects": {
+    "api": { "name": "pgTelemetry-API", "version": "1.0.0" },
+    "dashboard": { "name": "pgTelemetry-Web", "version": "0.1.0" },
+    "sdk-cpp": { "name": "pgTelemetry-SDK-CPP" }
+  }
+}
+```
+
+`projects` 맵의 키는 서브 디렉토리 이름입니다. 지정하지 않은 서브 디렉토리는 자동 감지된 이름을 사용합니다.
 
 ## 예시
 

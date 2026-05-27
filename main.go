@@ -123,25 +123,37 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func submitProject(client *dtrack.Client, cfg *config.Config, info *detector.ProjectInfo, rootName string, isMulti bool) error {
-	// Resolve project name
-	projectName := cfg.Project
-	if projectName == "" || isMulti {
-		if info.Name != "" {
+	subdir := filepath.Base(info.Dir)
+
+	// projects map in config takes highest priority for mono-repos
+	projectName := ""
+	projectVersion := ""
+	if ov, ok := cfg.Projects[subdir]; ok {
+		projectName = ov.Name
+		projectVersion = ov.Version
+	}
+
+	// Fall back to top-level config fields, then auto-detection
+	if projectName == "" {
+		if !isMulti && cfg.Project != "" {
+			projectName = cfg.Project
+		} else if info.Name != "" {
 			projectName = info.Name
 		} else {
-			projectName = filepath.Base(info.Dir)
+			projectName = subdir
 		}
 		if isMulti {
 			projectName = rootName + "/" + projectName
 		}
 	}
-
-	projectVersion := cfg.Version
 	if projectVersion == "" {
-		projectVersion = info.Version
-	}
-	if projectVersion == "" {
-		projectVersion = "0.0.0"
+		if cfg.Version != "" {
+			projectVersion = cfg.Version
+		} else if info.Version != "" {
+			projectVersion = info.Version
+		} else {
+			projectVersion = "0.0.0"
+		}
 	}
 
 	fmt.Printf("\n  [%s] %s @ %s\n", info.Type, projectName, projectVersion)

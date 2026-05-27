@@ -6,12 +6,22 @@ import (
 	"os"
 )
 
+// ProjectOverride lets users customize the name/version of a specific sub-project.
+// Key in the Projects map is the subdirectory name (e.g. "api", "dashboard").
+type ProjectOverride struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type Config struct {
 	Server  string `json:"server"`
 	APIKey  string `json:"api_key"`
 	Dir     string `json:"dir"`
 	Project string `json:"project"`
 	Version string `json:"version"`
+	// Projects overrides name/version per sub-directory for mono-repos.
+	// Key: subdirectory name, Value: override
+	Projects map[string]ProjectOverride `json:"projects"`
 }
 
 func LoadFromFile(path string) (*Config, error) {
