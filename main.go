@@ -44,13 +44,18 @@ func init() {
 func run(cmd *cobra.Command, args []string) error {
 	cfg := &config.Config{}
 
-	// Load JSON config if provided
-	if flags.configFile != "" {
-		fileCfg, err := config.LoadFromFile(flags.configFile)
-		if err != nil {
-			return err
+	// Auto-load config.json if --config and --server are both absent
+	configPath := flags.configFile
+	if configPath == "" && flags.server == "" {
+		configPath = "config.json"
+	}
+	if configPath != "" {
+		fileCfg, err := config.LoadFromFile(configPath)
+		if err != nil && flags.configFile != "" {
+			return err // only hard-fail if explicitly specified
+		} else if err == nil {
+			cfg = fileCfg
 		}
-		cfg = fileCfg
 	}
 
 	// Positional argument takes priority over --dir flag
