@@ -59,6 +59,10 @@ func (c *Client) EnsureProject(name, version string) (string, error) {
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusConflict {
+		// Project already exists — look it up by name + version
+		return c.lookupProject(name, version)
+	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("create project failed (%d): %s", resp.StatusCode, string(data))
 	}
@@ -66,6 +70,30 @@ func (c *Client) EnsureProject(name, version string) (string, error) {
 	var proj projectResponse
 	if err := json.Unmarshal(data, &proj); err != nil {
 		return "", fmt.Errorf("parse project response: %w", err)
+	}
+	return proj.UUID, nil
+}
+
+// lookupProject finds an existing project UUID by name and version.
+func (c *Client) lookupProject(name, version string) (string, error) {
+	req, _ := http.NewRequest(http.MethodGet,
+		c.BaseURL+"/api/v1/project/lookup?name="+name+"&version="+version, nil)
+	req.Header.Set("X-Api-Key", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("lookup project request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("lookup project failed (%d): %s", resp.StatusCode, string(data))
+	}
+
+	var proj projectResponse
+	if err := json.Unmarshal(data, &proj); err != nil {
+		return "", fmt.Errorf("parse lookup response: %w", err)
 	}
 	return proj.UUID, nil
 }

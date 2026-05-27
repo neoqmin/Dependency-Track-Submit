@@ -142,6 +142,30 @@ func Detect(dir string) (*ProjectInfo, error) {
 		return info, nil
 	}
 
+	// Carthage
+	if exists(abs, "Cartfile") || exists(abs, "Cartfile.resolved") {
+		info := &ProjectInfo{Type: TypeSwift, Name: filepath.Base(abs)}
+		return info, nil
+	}
+
+	// Xcode project / workspace (no package manager)
+	if xcodeproj, ok := findGlob(abs, "*.xcodeproj"); ok {
+		info := &ProjectInfo{Type: TypeSwift}
+		info.Name = strings.TrimSuffix(filepath.Base(xcodeproj), ".xcodeproj")
+		return info, nil
+	}
+	if xcworkspace, ok := findGlob(abs, "*.xcworkspace"); ok {
+		info := &ProjectInfo{Type: TypeSwift}
+		info.Name = strings.TrimSuffix(filepath.Base(xcworkspace), ".xcworkspace")
+		return info, nil
+	}
+
+	// Plain Swift source (*.swift files present, no other manifest)
+	if swiftFiles, _ := filepath.Glob(filepath.Join(abs, "*.swift")); len(swiftFiles) > 0 {
+		info := &ProjectInfo{Type: TypeSwift, Name: filepath.Base(abs)}
+		return info, nil
+	}
+
 	return &ProjectInfo{Type: TypeUnknown}, nil
 }
 

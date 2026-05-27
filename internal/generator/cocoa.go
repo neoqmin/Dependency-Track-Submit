@@ -22,7 +22,7 @@ func NewCocoaGenerator() *CocoaGenerator {
 	return &CocoaGenerator{cdxgen: &CdxgenGenerator{}}
 }
 
-func (g *CocoaGenerator) Name() string    { return "podfile-lock-parser" }
+func (g *CocoaGenerator) Name() string    { return "cocoapods (Podfile.lock)" }
 func (g *CocoaGenerator) Available() bool { return true }
 
 func (g *CocoaGenerator) Generate(dir, outPath string) error {

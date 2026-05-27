@@ -232,8 +232,10 @@ func selectGenerator(info *detector.ProjectInfo) generator.Generator {
 		return generator.NewCppGenerator()
 	case detector.TypeNpm:
 		return &generator.NpmGenerator{}
-	case detector.TypeCocoa, detector.TypeSwift:
+	case detector.TypeCocoa:
 		return generator.NewCocoaGenerator()
+	case detector.TypeSwift:
+		return generator.NewSwiftGenerator()
 	default:
 		return nil
 	}
