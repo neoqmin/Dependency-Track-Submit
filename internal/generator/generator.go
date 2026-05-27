@@ -1,26 +1,37 @@
 package generator
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
-
-	"github.com/tidwall/sjson"
 )
 
-// DowngradeSpecVersion rewrites the specVersion field in a CycloneDX JSON BOM
-// to maxVersion if the file contains a newer version.
-func DowngradeSpecVersion(bomPath, maxVersion string) error {
+// DowngradeSpecVersion rewrites the specVersion field in a CycloneDX JSON BOM to maxVersion.
+// Returns the specVersion that was written.
+func DowngradeSpecVersion(bomPath, maxVersion string) (string, error) {
 	data, err := os.ReadFile(bomPath)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("read bom: %w", err)
 	}
-	patched, err := sjson.SetBytes(data, "specVersion", maxVersion)
+
+	var bom map[string]json.RawMessage
+	if err := json.Unmarshal(data, &bom); err != nil {
+		return "", fmt.Errorf("parse bom json: %w", err)
+	}
+
+	versionBytes, err := json.Marshal(maxVersion)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return os.WriteFile(bomPath, patched, 0644)
+	bom["specVersion"] = json.RawMessage(versionBytes)
+
+	patched, err := json.Marshal(bom)
+	if err != nil {
+		return "", fmt.Errorf("marshal bom: %w", err)
+	}
+	return maxVersion, os.WriteFile(bomPath, patched, 0644)
 }
 
 // Generator produces a CycloneDX JSON SBOM at outPath.
