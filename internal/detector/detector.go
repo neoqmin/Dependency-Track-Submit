@@ -24,8 +24,48 @@ type ProjectInfo struct {
 	Type    ProjectType
 	Name    string
 	Version string
+	Dir     string
 	// Extra holds the primary manifest path (e.g. *.csproj path)
 	Extra string
+}
+
+// DetectAll scans dir and its immediate subdirectories.
+// Returns all detected projects. If the root itself is a project, only the root is returned.
+func DetectAll(dir string) ([]*ProjectInfo, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := Detect(abs)
+	if err != nil {
+		return nil, err
+	}
+	if root.Type != TypeUnknown {
+		root.Dir = abs
+		return []*ProjectInfo{root}, nil
+	}
+
+	// Root has no manifest — scan immediate subdirectories
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*ProjectInfo
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		sub := filepath.Join(abs, e.Name())
+		info, err := Detect(sub)
+		if err != nil || info.Type == TypeUnknown {
+			continue
+		}
+		info.Dir = sub
+		results = append(results, info)
+	}
+	return results, nil
 }
 
 func Detect(dir string) (*ProjectInfo, error) {

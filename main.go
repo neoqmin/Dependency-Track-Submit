@@ -87,25 +87,55 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid directory: %w", err)
 	}
 
-	// Step 1: Detect project type
+	// Step 1: Detect project(s) — supports mono-repos
 	fmt.Printf("→ Scanning %s\n", absDir)
-	info, err := detector.Detect(absDir)
+	projects, err := detector.DetectAll(absDir)
 	if err != nil {
 		return fmt.Errorf("detection error: %w", err)
 	}
-	if info.Type == detector.TypeUnknown {
-		return fmt.Errorf("could not detect project type in %s\n  Supported: pom.xml, build.gradle, go.mod, *.csproj, *.sln, CMakeLists.txt, conanfile.*, vcpkg.json, package.json", absDir)
+	if len(projects) == 0 {
+		return fmt.Errorf("could not detect any project in %s\n  Supported: pom.xml, build.gradle, go.mod, *.csproj, *.sln, CMakeLists.txt, conanfile.*, vcpkg.json, package.json", absDir)
 	}
-	fmt.Printf("  Detected: %s\n", info.Type)
 
-	// Step 2: Resolve name/version
+	rootName := cfg.Project
+	if rootName == "" {
+		rootName = filepath.Base(absDir)
+	}
+	isMulti := len(projects) > 1
+	if isMulti {
+		fmt.Printf("  Found %d sub-projects\n", len(projects))
+	}
+
+	client := dtrack.New(cfg.Server, cfg.APIKey)
+	var failed []string
+
+	for _, info := range projects {
+		if err := submitProject(client, cfg, info, rootName, isMulti); err != nil {
+			fmt.Printf("  ✗ %s: %v\n", info.Dir, err)
+			failed = append(failed, info.Dir)
+		}
+	}
+
+	if len(failed) > 0 {
+		return fmt.Errorf("%d project(s) failed", len(failed))
+	}
+	return nil
+}
+
+func submitProject(client *dtrack.Client, cfg *config.Config, info *detector.ProjectInfo, rootName string, isMulti bool) error {
+	// Resolve project name
 	projectName := cfg.Project
-	if projectName == "" {
-		projectName = info.Name
+	if projectName == "" || isMulti {
+		if info.Name != "" {
+			projectName = info.Name
+		} else {
+			projectName = filepath.Base(info.Dir)
+		}
+		if isMulti {
+			projectName = rootName + "/" + projectName
+		}
 	}
-	if projectName == "" {
-		projectName = filepath.Base(absDir)
-	}
+
 	projectVersion := cfg.Version
 	if projectVersion == "" {
 		projectVersion = info.Version
@@ -113,14 +143,15 @@ func run(cmd *cobra.Command, args []string) error {
 	if projectVersion == "" {
 		projectVersion = "0.0.0"
 	}
-	fmt.Printf("  Project:  %s @ %s\n", projectName, projectVersion)
 
-	// Step 3: Select generator
+	fmt.Printf("\n  [%s] %s @ %s\n", info.Type, projectName, projectVersion)
+
+	// Select generator
 	gen := selectGenerator(info)
 	if gen == nil || !gen.Available() {
 		fallback := &generator.CdxgenGenerator{}
 		if !fallback.Available() {
-			return fmt.Errorf("no SBOM generator available\n  Install one of:\n  - cdxgen: npm install -g @cyclonedx/cdxgen\n  - Language-specific: mvn, gradle, cyclonedx-gomod, dotnet CycloneDX, npx")
+			return fmt.Errorf("no SBOM generator available\n  Install: npm install -g @cyclonedx/cdxgen")
 		}
 		if gen != nil {
 			fmt.Printf("  ⚠ %s not found, falling back to cdxgen\n", gen.Name())
@@ -129,54 +160,45 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("  Generator: %s\n", gen.Name())
 
-	// Step 4: Generate SBOM
-	bomPath := filepath.Join(os.TempDir(), "dtrack-bom.json")
+	// Generate SBOM
+	bomPath := filepath.Join(os.TempDir(), "dtrack-bom-"+filepath.Base(info.Dir)+".json")
 	defer os.Remove(bomPath)
 
 	fmt.Printf("→ Generating SBOM...\n")
-	if err := gen.Generate(absDir, bomPath); err != nil {
+	if err := gen.Generate(info.Dir, bomPath); err != nil {
 		return fmt.Errorf("SBOM generation failed: %w", err)
 	}
 	fi, _ := os.Stat(bomPath)
-	fmt.Printf("  Done (%s, %.1f KB)\n", filepath.Base(bomPath), float64(fi.Size())/1024)
+	fmt.Printf("  Done (%.1f KB)\n", float64(fi.Size())/1024)
 
-	// Step 5: Upload to Dependency-Track
-	client := dtrack.New(cfg.Server, cfg.APIKey)
-
-	fmt.Printf("→ Creating project in Dependency-Track...\n")
+	// Upload
+	fmt.Printf("→ Uploading...\n")
 	uuid, err := client.EnsureProject(projectName, projectVersion)
 	if err != nil {
 		return fmt.Errorf("project creation failed: %w", err)
 	}
-	fmt.Printf("  UUID: %s\n", uuid)
 
-	fmt.Printf("→ Uploading SBOM...\n")
 	token, err := client.UploadBOM(uuid, bomPath)
 	if err != nil {
-		return fmt.Errorf("SBOM upload failed: %w", err)
+		return fmt.Errorf("upload failed: %w", err)
 	}
 
-	fmt.Printf("→ Waiting for analysis to complete...\n")
+	fmt.Printf("→ Waiting for analysis...\n")
 	if err := client.WaitForProcessing(token); err != nil {
 		return err
 	}
 
-	// Step 6: Report results
 	proj, err := client.GetProjectMetrics(uuid)
 	if err == nil && proj.Metrics != nil {
 		m := proj.Metrics
-		fmt.Printf("\n✓ Done!\n")
-		fmt.Printf("  Components:      %d\n", m.Components)
-		fmt.Printf("  Vulnerabilities: %d", m.Vulnerabilities)
+		fmt.Printf("✓ Components: %d  Vulnerabilities: %d", m.Components, m.Vulnerabilities)
 		if m.Vulnerabilities > 0 {
 			fmt.Printf(" (Critical:%d High:%d Medium:%d Low:%d)", m.Critical, m.High, m.Medium, m.Low)
 		}
 		fmt.Printf("\n")
-		fmt.Printf("  Dashboard: %s\n", cfg.Server)
 	} else {
-		fmt.Printf("\n✓ Done! View results at %s\n", cfg.Server)
+		fmt.Printf("✓ Done\n")
 	}
-
 	return nil
 }
 
