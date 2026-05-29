@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pribit/dtrack-submit/internal/config"
 	"github.com/pribit/dtrack-submit/internal/detector"
 	"github.com/pribit/dtrack-submit/internal/dtrack"
 	"github.com/pribit/dtrack-submit/internal/generator"
+	"github.com/pribit/dtrack-submit/internal/report"
 	"github.com/spf13/cobra"
 )
 
@@ -253,6 +255,94 @@ func findConfig() string {
 		}
 	}
 	return ""
+}
+
+// ── report command ──────────────────────────────────────────────────────────
+
+var reportCmd = &cobra.Command{
+	Use:   "report",
+	Short: "Query Dependency-Track for vulnerabilities and print a remediation report",
+	Example: `  dtrack-submit report --server http://localhost:8080 --api-key odt_xxx \
+    --project MyApp --version 1.0.0
+
+  # Save as Markdown
+  dtrack-submit report ... --output report.md
+
+  # Save as JSON
+  dtrack-submit report ... --output report.json
+
+  # Lower severity threshold
+  dtrack-submit report ... --severity MEDIUM`,
+	RunE: runReport,
+}
+
+var reportFlags struct {
+	server   string
+	apiKey   string
+	project  string
+	version  string
+	severity string
+	output   string
+}
+
+func init() {
+	f := reportCmd.Flags()
+	f.StringVar(&reportFlags.server, "server", "", "Dependency-Track server URL")
+	f.StringVar(&reportFlags.apiKey, "api-key", "", "Dependency-Track API key")
+	f.StringVar(&reportFlags.project, "project", "", "Project name")
+	f.StringVar(&reportFlags.version, "version", "", "Project version")
+	f.StringVar(&reportFlags.severity, "severity", "HIGH", "Minimum severity to report (CRITICAL, HIGH, MEDIUM, LOW)")
+	f.StringVar(&reportFlags.output, "output", "", "Save report to file (.md or .json)")
+
+	rootCmd.AddCommand(reportCmd)
+}
+
+func runReport(cmd *cobra.Command, args []string) error {
+	if reportFlags.server == "" {
+		return fmt.Errorf("--server is required")
+	}
+	if reportFlags.apiKey == "" {
+		return fmt.Errorf("--api-key is required")
+	}
+	if reportFlags.project == "" {
+		return fmt.Errorf("--project is required")
+	}
+	if reportFlags.version == "" {
+		return fmt.Errorf("--version is required")
+	}
+
+	minSeverity := strings.ToUpper(reportFlags.severity)
+
+	client := dtrack.New(reportFlags.server, reportFlags.apiKey)
+
+	// Resolve project UUID
+	uuid, err := client.LookupProject(reportFlags.project, reportFlags.version)
+	if err != nil {
+		return fmt.Errorf("project not found (%s @ %s): %w", reportFlags.project, reportFlags.version, err)
+	}
+
+	fmt.Printf("→ Fetching findings for %s @ %s...\n", reportFlags.project, reportFlags.version)
+	rows, err := report.Generate(client, uuid, reportFlags.project, reportFlags.version, minSeverity)
+	if err != nil {
+		return fmt.Errorf("report generation failed: %w", err)
+	}
+
+	report.PrintConsole(rows, reportFlags.project, reportFlags.version, minSeverity)
+
+	if reportFlags.output != "" {
+		var saveErr error
+		if strings.HasSuffix(reportFlags.output, ".json") {
+			saveErr = report.SaveJSON(rows, reportFlags.project, reportFlags.version, minSeverity, reportFlags.output)
+		} else {
+			saveErr = report.SaveMarkdown(rows, reportFlags.project, reportFlags.version, minSeverity, reportFlags.output)
+		}
+		if saveErr != nil {
+			return fmt.Errorf("save report failed: %w", saveErr)
+		}
+		fmt.Printf("→ Saved to %s\n", reportFlags.output)
+	}
+
+	return nil
 }
 
 func main() {
