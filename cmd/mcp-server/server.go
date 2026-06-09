@@ -138,7 +138,7 @@ func (s *Server) handle(req jsonRPCRequest) {
 		s.writeResult(req.ID, map[string]any{
 			"protocolVersion": "2024-11-05",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "dtrack-mcp-server", "version": "1.0.0"},
+			"serverInfo":      map[string]any{"name": "dtrack-mcp-server", "version": version},
 		})
 	case "notifications/initialized":
 		// notifications require no response

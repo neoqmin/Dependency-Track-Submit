@@ -19,7 +19,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "[dtrack-mcp] WARNING: no API key configured (set DTRACK_API_KEY or config api_key)")
 	}
 
-	logf("starting — server=%s", cfg.Server)
+	logf("starting — version=%s server=%s", version, cfg.Server)
+
+	startupUpdateCheck()
 
 	client := NewDTrackClient(cfg.Server, cfg.APIKey)
 	server := NewServer(client)

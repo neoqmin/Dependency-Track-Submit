@@ -29,6 +29,44 @@ func allTools(c *DTrackClient) []toolDef {
 		getRemediationTool(c),
 		submitProjectTool(c),
 		generateReportTool(c),
+		checkUpdateTool(),
+	}
+}
+
+// ── dtrack_check_update ───────────────────────────────────────────────────────
+
+func checkUpdateTool() toolDef {
+	return toolDef{
+		Name:        "dtrack_check_update",
+		Description: "dtrack-mcp-server의 최신 릴리스를 확인하고, 새 버전이 있으면 자가 업데이트합니다. apply=false(기본)면 확인만 하고, apply=true면 실제로 교체합니다. 교체 후에는 MCP 서버를 재시작해야 적용됩니다.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"apply": map[string]any{"type": "boolean", "description": "true면 새 버전을 실제로 다운로드하여 교체합니다 (기본 false: 확인만)"},
+			},
+		},
+		Handler: func(ctx context.Context, args map[string]any) (string, error) {
+			apply, _ := args["apply"].(bool)
+
+			rel, err := checkForUpdate(ctx)
+			if err != nil {
+				return "", fmt.Errorf("업데이트 확인 실패: %w", err)
+			}
+			if rel == nil {
+				return fmt.Sprintf("이미 최신 버전입니다 (현재: %s).", version), nil
+			}
+
+			if !apply {
+				return fmt.Sprintf("새 버전이 있습니다: %s → %s\n  릴리스: %s\n업데이트하려면 apply=true로 다시 호출하세요. (교체 후 MCP 서버 재시작 필요)",
+					version, rel.TagName, rel.HTMLURL), nil
+			}
+
+			if err := applyUpdate(ctx, rel); err != nil {
+				return "", fmt.Errorf("업데이트 적용 실패: %w", err)
+			}
+			logf("self-update applied: %s → %s", version, rel.TagName)
+			return fmt.Sprintf("✓ 업데이트 완료: %s → %s\n  MCP 서버를 재시작하면 새 버전이 적용됩니다.", version, rel.TagName), nil
+		},
 	}
 }
 
