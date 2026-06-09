@@ -23,8 +23,9 @@ import (
 // release time. Dev builds report "dev" and never consider themselves outdated.
 var version = "dev"
 
-// updateRepo is the GitHub owner/repo that releases are published to.
-const updateRepo = "pribit/dtrack-submit"
+// updateRepo is the GitHub owner/repo that releases are published to. This is
+// the hosting repo (case-sensitive in the API path), not the Go module path.
+const updateRepo = "neoqmin/Dependency-Track-Submit"
 
 // releaseInfo is the subset of the GitHub Releases API we care about.
 type releaseInfo struct {
