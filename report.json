@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-05-27T05:35:30Z",
+  "project": "pgTelemetry/api",
+  "version": "1.26.2",
+  "minSeverity": "HIGH",
+  "totalPackages": 1,
+  "totalVulns": 9,
+  "critical": 7,
+  "high": 2,
+  "rows": [
+    {
+      "Package": "golang.org/x/crypto",
+      "CurrentVer": "v0.51.0",
+      "LatestVer": "v0.52.0",
+      "Purl": "pkg:golang/golang.org/x/crypto@v0.51.0",
+      "Vulns": [
+        {
+          "VulnId": "CVE-2026-39830",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-39831",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-39832",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-39833",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-39834",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-42508",
+          "Severity": "CRITICAL",
+          "Cvss": 9.1
+        },
+        {
+          "VulnId": "CVE-2026-46595",
+          "Severity": "CRITICAL",
+          "Cvss": 10
+        },
+        {
+          "VulnId": "CVE-2026-39829",
+          "Severity": "HIGH",
+          "Cvss": 7.5
+        },
+        {
+          "VulnId": "CVE-2026-46597",
+          "Severity": "HIGH",
+          "Cvss": 7.5
+        }
+      ],
+      "WorseSeverity": "CRITICAL",
+      "WorseCvss": 9.1
+    }
+  ]
+}

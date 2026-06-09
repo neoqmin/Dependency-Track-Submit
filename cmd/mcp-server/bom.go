@@ -85,7 +85,29 @@ func generateBOMFromLockfiles(workDir string) (string, string, error) {
 	return "", "", fmt.Errorf("syft not found and no supported lockfile (go.mod, package-lock.json, requirements.txt)")
 }
 
-type dep struct{ name, version string }
+// dep is a single component. ecosystem is the Package URL type (golang, npm,
+// pypi) used to build a PURL — Dependency-Track matches vulnerabilities by PURL,
+// so a component without one yields zero findings.
+type dep struct{ name, version, ecosystem string }
+
+// purl builds a CycloneDX Package URL for the dependency, e.g.
+// pkg:golang/golang.org/x/crypto@v0.51.0 or pkg:npm/lodash@4.17.21.
+func (d dep) purl() string {
+	if d.ecosystem == "" {
+		return ""
+	}
+	name := d.name
+	ver := d.version
+	switch d.ecosystem {
+	case "pypi":
+		// PyPI PURLs are lowercase with underscores normalized to hyphens.
+		name = strings.ReplaceAll(strings.ToLower(name), "_", "-")
+	case "npm":
+		// Scoped packages (@scope/name) keep the @ but the slash is encoded.
+		name = strings.Replace(name, "/", "%2F", 1)
+	}
+	return fmt.Sprintf("pkg:%s/%s@%s", d.ecosystem, name, ver)
+}
 
 func bomFromGoMod(workDir string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(workDir, "go.mod"))
@@ -109,7 +131,7 @@ func bomFromGoMod(workDir string) (string, error) {
 			line = strings.TrimPrefix(line, "require ")
 			parts := strings.Fields(line)
 			if len(parts) >= 2 && !strings.HasPrefix(parts[0], "//") {
-				deps = append(deps, dep{parts[0], parts[1]})
+				deps = append(deps, dep{parts[0], parts[1], "golang"})
 			}
 		}
 	}
@@ -132,7 +154,7 @@ func bomFromPackageLock(workDir string) (string, error) {
 			currentName = strings.Trim(line, `" {:`)
 		}
 		if currentName != "" && currentVersion != "" {
-			deps = append(deps, dep{currentName, currentVersion})
+			deps = append(deps, dep{currentName, currentVersion, "npm"})
 			currentName, currentVersion = "", ""
 		}
 	}
@@ -158,7 +180,7 @@ func bomFromRequirements(workDir string) (string, error) {
 				if i := strings.IndexAny(ver, ",; "); i > 0 {
 					ver = ver[:i]
 				}
-				deps = append(deps, dep{name, ver})
+				deps = append(deps, dep{name, ver, "pypi"})
 				break
 			}
 		}
@@ -175,9 +197,17 @@ func buildCycloneDXXML(deps []dep) string {
 	for _, d := range deps {
 		name := escapeXML(d.name)
 		ver := escapeXML(d.version)
-		fmt.Fprintf(&sb, "    <component type=\"library\">\n")
+		purl := d.purl()
+		if purl != "" {
+			fmt.Fprintf(&sb, "    <component type=\"library\" bom-ref=\"%s\">\n", escapeXML(purl))
+		} else {
+			fmt.Fprintf(&sb, "    <component type=\"library\">\n")
+		}
 		fmt.Fprintf(&sb, "      <name>%s</name>\n", name)
 		fmt.Fprintf(&sb, "      <version>%s</version>\n", ver)
+		if purl != "" {
+			fmt.Fprintf(&sb, "      <purl>%s</purl>\n", escapeXML(purl))
+		}
 		fmt.Fprintf(&sb, "    </component>\n")
 	}
 	sb.WriteString("  </components>\n</bom>")
