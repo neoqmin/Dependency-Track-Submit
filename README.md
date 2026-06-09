@@ -203,6 +203,80 @@ dtrack-submit --config config.json --version 1.2.3 ./myproject
 ✓ Components: 2  Vulnerabilities: 0
 ```
 
+## MCP 서버
+
+`dtrack-mcp-server`는 Dependency-Track 기능을 [Model Context Protocol](https://modelcontextprotocol.io)로 노출하는 별도 실행 파일입니다. Claude Desktop, Claude Code 등 MCP 클라이언트에서 자연어로 SBOM 등록·취약점 조회를 수행할 수 있습니다.
+
+CLI와 동일한 프로젝트 타입 감지·SBOM 생성 로직을 사용하며, 전용 도구(`syft`, `cyclonedx-gomod` 등)가 없으면 lockfile을 직접 파싱해 PURL 포함 BOM을 생성합니다.
+
+### 설치
+
+Windows는 [Releases](../../releases)의 NSIS 설치 파일(`dtrack-submit-setup-*.exe`)로 CLI와 MCP 서버를 함께 설치합니다. 설치 중 **Dependency-Track 서버 주소와 API 키를 입력**하면 설정 파일(`~/.dtrack.json`, `설치폴더\config.json`)에 자동 저장되고, 설치 폴더가 PATH에 등록됩니다. 업그레이드 시 API 키를 빈칸으로 두면 기존 설정이 유지됩니다.
+
+Linux는 `dtrack-mcp-server-linux-amd64` 바이너리를 받아 PATH에 두고, 아래 환경 변수 또는 설정 파일로 접속 정보를 지정합니다.
+
+### 제공 도구
+
+| 도구 | 설명 |
+|------|------|
+| `dtrack_submit_project` | 디렉토리를 자동 감지해 SBOM 생성 후 등록·분석 (CLI와 동일 로직) |
+| `dtrack_upload_bom` | 현재 디렉토리의 SBOM을 생성해 업로드 (syft/lockfile) |
+| `dtrack_list_projects` | 등록된 프로젝트 목록 조회 |
+| `dtrack_get_findings` | 프로젝트의 취약점 목록 조회 (severity 필터 가능) |
+| `dtrack_get_project_metrics` | 취약점 통계·위험 점수 조회 |
+| `dtrack_get_component_remediation` | 특정 컴포넌트의 취약점·수정 버전 조회 |
+| `dtrack_generate_report` | 패키지별 그룹화 취약점 리포트 생성 |
+| `dtrack_check_update` | 최신 릴리스 확인 및 자가 업데이트 |
+
+### 설정
+
+Windows 설치 파일을 쓰면 설치 중 입력한 값이 설정 파일로 저장되므로 별도 설정이 필요 없습니다. 직접 지정하려면 환경 변수 또는 설정 파일을 사용합니다 (우선순위: 환경 변수 > 설정 파일).
+
+| 환경 변수 | 설명 |
+|-----------|------|
+| `DTRACK_URL` | Dependency-Track 서버 URL (기본 `http://localhost:8080`) |
+| `DTRACK_API_KEY` | API 키 |
+| `DTRACK_CONFIG` | 설정 파일 경로 (생략 시 `./dtrack.json`, `~/.dtrack.json` 탐색) |
+| `DTRACK_NO_UPDATE_CHECK` | `1`이면 시작 시 업데이트 확인 비활성화 |
+
+설정 파일 예시는 `dtrack-mcp-server --example-config`로 출력할 수 있습니다.
+
+### MCP 클라이언트 등록
+
+설치 파일이 클라이언트에 서버를 자동 등록하지는 않으므로, 이 단계는 직접 해야 합니다. 설치 시 설정 파일이 저장됐다면 접속 정보(`-e`/`env`)는 생략해도 됩니다.
+
+Claude Code:
+
+```bash
+# 설정 파일이 이미 저장된 경우
+claude mcp add dependency-track dtrack-mcp-server
+
+# 접속 정보를 직접 지정 (설정 파일보다 우선)
+claude mcp add dependency-track dtrack-mcp-server \
+  -e DTRACK_URL=http://localhost:8080 \
+  -e DTRACK_API_KEY=odt_xxxxxxxxxxxxxxxxxxxxxx
+```
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dependency-track": {
+      "command": "dtrack-mcp-server",
+      "env": {
+        "DTRACK_URL": "http://localhost:8080",
+        "DTRACK_API_KEY": "odt_xxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+### 자가 업데이트
+
+서버는 시작 시 백그라운드로 최신 릴리스를 확인하고(6시간마다, stderr로만 알림), 새 버전이 있으면 안내합니다. 클라이언트에서 `dtrack_check_update`를 호출하면 신버전을 확인하고, 동의 시 실제로 교체합니다. 교체된 바이너리는 **MCP 서버를 재시작한 뒤** 적용됩니다. (`DTRACK_NO_UPDATE_CHECK=1`로 시작 시 확인을 끌 수 있습니다.)
+
 ## API 키 발급
 
 1. Dependency-Track 관리자 콘솔 접속 (`http://<server>`)

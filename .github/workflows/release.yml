@@ -64,13 +64,13 @@ jobs:
       - name: Install NSIS + EnVar plugin
         run: |
           sudo apt-get update
-          sudo apt-get install -y nsis nsis-pluginapi unzip curl
-          # EnVar plugin for PATH editing.
+          sudo apt-get install -y nsis unzip curl
+          # Fetch the EnVar plugin into a repo-local dir; the script is built with
+          # -X '!addplugindir', avoiding fragile writes to the system NSIS dir.
           curl -sSL -o /tmp/envar.zip https://nsis.sourceforge.io/mediawiki/images/7/7f/EnVar_plugin.zip
-          PLUGIN_DIR=$(find /usr/share/nsis -type d -name Plugins | head -1)
-          sudo unzip -o /tmp/envar.zip -d /tmp/envar
-          sudo cp /tmp/envar/Plugins/x86-unicode/EnVar.dll "${PLUGIN_DIR}/x86-unicode/" || \
-            sudo cp -r /tmp/envar/Plugins/* "${PLUGIN_DIR}/"
+          unzip -o /tmp/envar.zip -d /tmp/envar
+          mkdir -p installer/plugins/x86-unicode
+          cp /tmp/envar/Plugins/x86-unicode/EnVar.dll installer/plugins/x86-unicode/
 
       - name: Stage binaries for installer
         run: |
@@ -83,7 +83,9 @@ jobs:
         run: |
           # Strip leading 'v' for the version define (1.2.3, not v1.2.3).
           VER="${VERSION#v}"
-          makensis -DVERSION="${VER}" installer/dtrack-submit.nsi
+          makensis -DVERSION="${VER}" \
+            -X'!addplugindir /x86-unicode "installer/plugins/x86-unicode"' \
+            installer/dtrack-submit.nsi
           mkdir -p out
           mv installer/dtrack-submit-setup-*.exe out/
 

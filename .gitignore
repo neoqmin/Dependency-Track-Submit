@@ -3,3 +3,7 @@ dtrack-submit
 dtrack-submit.exe
 *.exe
 config.json
+
+# Installer build artifacts (staged in CI)
+installer/plugins/
+out/
