@@ -211,6 +211,26 @@ func fetchChecksum(ctx context.Context, rel *releaseInfo, binName string) ([]byt
 	return nil, nil
 }
 
+// cleanupOldBinary removes the "<exe>.old" image left beside this executable by
+// a previous in-place update (NSIS rename-aside or selfupdate). Once this new
+// binary is running, the old one is no longer locked and can be deleted. Best
+// effort — failures are logged to stderr and ignored.
+func cleanupOldBinary() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	old := exe + ".old"
+	if _, err := os.Stat(old); err != nil {
+		return
+	}
+	if err := os.Remove(old); err != nil {
+		logf("could not remove %s (still locked?): %v", old, err)
+		return
+	}
+	logf("removed leftover %s", old)
+}
+
 // startupCheckInterval throttles the background check so frequent MCP server
 // respawns don't burn GitHub's 60 req/hr unauthenticated rate limit.
 const startupCheckInterval = 6 * time.Hour

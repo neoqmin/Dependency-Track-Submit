@@ -21,6 +21,7 @@ func main() {
 
 	logf("starting — version=%s server=%s", version, cfg.Server)
 
+	cleanupOldBinary()
 	startupUpdateCheck()
 
 	client := NewDTrackClient(cfg.Server, cfg.APIKey)

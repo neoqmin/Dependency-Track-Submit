@@ -102,8 +102,23 @@ FunctionEnd
 Section "dtrack-submit" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
+
+  ; dtrack-mcp-server.exe is usually running (launched by the MCP client), which
+  ; locks it against overwrite — a plain File here fails with SHARING VIOLATION.
+  ; Windows DOES allow renaming a running exe, so move the old one aside first.
+  ; The live process keeps running off the renamed image; the new binary takes
+  ; effect on the next launch (same restart-to-apply model as self-update).
+  ; The server deletes leftover *.old next to itself at startup; /REBOOTOK is the
+  ; fallback if the .old image is still locked at install time.
+  ${If} ${FileExists} "$INSTDIR\dtrack-mcp-server.exe"
+    Delete "$INSTDIR\dtrack-mcp-server.exe.old"
+    Rename "$INSTDIR\dtrack-mcp-server.exe" "$INSTDIR\dtrack-mcp-server.exe.old"
+  ${EndIf}
+
   File "dtrack-submit.exe"
   File "dtrack-mcp-server.exe"
+
+  Delete /REBOOTOK "$INSTDIR\dtrack-mcp-server.exe.old"
 
   ; Write config files only when BOTH server and API key are provided. This
   ; avoids clobbering a working config with blanks on a click-through upgrade
@@ -145,7 +160,10 @@ SectionEnd
 
 Section "Uninstall"
   Delete "$INSTDIR\dtrack-submit.exe"
-  Delete "$INSTDIR\dtrack-mcp-server.exe"
+  ; The MCP server may still be running; /REBOOTOK degrades a locked delete to
+  ; reboot-time cleanup instead of silently failing.
+  Delete /REBOOTOK "$INSTDIR\dtrack-mcp-server.exe"
+  Delete /REBOOTOK "$INSTDIR\dtrack-mcp-server.exe.old"
   Delete "$INSTDIR\config.json"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
